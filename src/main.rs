@@ -1,17 +1,19 @@
-// use std::time::SystemTime;
-use chrono;
 use chrono::offset::Local;
-use chrono::DateTime;
-use chrono::Duration;
-use chrono::TimeZone;
-use chrono::{Date, Datelike};
+use chrono::{Date, Datelike, Duration, TimeZone};
 use regex::Regex;
 use std::env;
 use std::string::String;
+use serde::Deserialize;
+use std::fs::File;
+use std::path::Path;
 
-// fn get_week_number(today_timestamp: DateTime<Local>) -> u32 {
+#[derive(Debug, Deserialize)]
+struct Task {
+    name: String,
+    schedule: String,
+}
+
 fn get_week_number(today_timestamp: Date<Local>) -> u32 {
-    // let naive_date = today_timestamp.naive_local().date();
     let naive_date = today_timestamp.naive_local();
     return naive_date.iso_week().week();
 }
@@ -21,16 +23,14 @@ fn get_nice_date(today_timestamp: &Date<Local>) -> String {
     return naive_date.format("%A %d/%m/%y").to_string();
 }
 
-// fn get_scheduled_date(today_timestamp: DateTime<Local>) -> String {
 fn get_scheduled_date(today_timestamp: &Date<Local>) -> String {
-    // let naive_date = today_timestamp.naive_local().date();
     let naive_date = today_timestamp.naive_local();
     return naive_date.format("%Y-%m-%d %a").to_string();
 }
 
 fn is_valid_arg(args: &Vec<String>) -> bool {
     let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-    if args.len() < 2 {
+    if args.len() < 3 {
         return false;
     }
     if !re.is_match(&args[1]) {
@@ -38,6 +38,13 @@ fn is_valid_arg(args: &Vec<String>) -> bool {
     }
 
     return true;
+}
+
+fn get_tasks_from_file(path: &String) -> std::vec::Vec<Task> {
+    let json_file_path = Path::new(path);
+    let file = File::open(json_file_path).expect("File not found");
+    let tasks: Vec<Task> = serde_json::from_reader(file).expect("error while reading");
+    return tasks;
 }
 
 fn get_dmy(arg_date: &String) -> (u32, u32, i32) {
@@ -49,24 +56,26 @@ fn get_dmy(arg_date: &String) -> (u32, u32, i32) {
     return (day, month, year);
 }
 
-fn create_agenda(day: u32, month: u32, year: i32) -> std::string::String {
+fn create_agenda(day: u32, month: u32, year: i32, tasks_file_path: &String) -> std::string::String {
     let today = Local.ymd(year, month, day);
     let mut result_string = String::new();
     result_string.push_str(&format!("** Week {}\n", get_week_number(today)));
 
+    let tasks = get_tasks_from_file(tasks_file_path);
     // 0 -> Monday, 6 -> Sunday
     for i in 0..7 {
-        println!("{}", i);
         let not_today = today + Duration::days(i);
         result_string.push_str(&format!("*** {}\n", get_nice_date(&not_today)));
-        result_string.push_str("**** TODO COSA\n");
-        result_string.push_str(&format!(
-            "     SCHEDULED: <{} horario>\n",
-            get_scheduled_date(&not_today)
-        ));
-        result_string.push_str("     :PROPERTIES:\n");
-        result_string.push_str("       :WILD_NOTIFIER_NOTIFY_BEFORE: 5 0\n");
-        result_string.push_str("     :END:\n\n");
+        for task in &tasks {
+            result_string.push_str(&format!("**** TODO {}\n", task.name));
+            result_string.push_str(&format!(
+                "     SCHEDULED: <{} {}>\n",
+                get_scheduled_date(&not_today), task.schedule
+            ));
+            result_string.push_str("     :PROPERTIES:\n");
+            result_string.push_str("       :WILD_NOTIFIER_NOTIFY_BEFORE: 5 0\n");
+            result_string.push_str("     :END:\n\n");
+        }
     }
 
     return result_string;
@@ -76,11 +85,12 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if !is_valid_arg(&args) {
         eprintln!("You have to put the date of the Monday as an argument e.g. yyyy-mm-dd");
+        eprintln!("You have to put the correct file path e.g. /Users/roeeyn/tasks.json");
         return;
     }
 
     let result = match get_dmy(&args[1]) {
-        (day, month, year) => create_agenda(day, month, year),
+        (day, month, year) => create_agenda(day, month, year, &args[2]),
     };
 
     println!("{}", result);
