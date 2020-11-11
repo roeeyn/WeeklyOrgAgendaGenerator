@@ -22,7 +22,7 @@ fn get_nice_date(today_timestamp: &Date<Local>) -> String {
 }
 
 // fn get_scheduled_date(today_timestamp: DateTime<Local>) -> String {
-fn get_scheduled_date(today_timestamp: Date<Local>) -> String {
+fn get_scheduled_date(today_timestamp: &Date<Local>) -> String {
     // let naive_date = today_timestamp.naive_local().date();
     let naive_date = today_timestamp.naive_local();
     return naive_date.format("%Y-%m-%d %a").to_string();
@@ -61,6 +61,10 @@ fn create_agenda(day:u32, month: u32, year: i32)-> std::string::String {
         let not_today = today + Duration::days(i);
         result_string.push_str(&format!("*** {}\n", get_nice_date(&not_today)));
         result_string.push_str("**** TODO COSA\n");
+        result_string.push_str(&format!("     SCHEDULED: <{} horario>\n", get_scheduled_date(&not_today)));
+        result_string.push_str("     :PROPERTIES:\n");
+        result_string.push_str("       :WILD_NOTIFIER_NOTIFY_BEFORE: 5 0\n");
+        result_string.push_str("     :END:\n\n");
 
     }
 
